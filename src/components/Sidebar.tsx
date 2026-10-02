@@ -1,18 +1,21 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { countriesService } from '../services/supabaseService';
+import { Country } from '../services/supabaseService';
 
 interface SidebarProps {
   currentPage: string;
   onNavigate: (page: string) => void;
+  country?: Country | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate, country }) => {
   const { user, logout } = useAuth();
 
   const menuItems = [
     { id: 'country', label: 'اقتصاد بلدي', icon: 'fa-solid fa-flag', badge: null },
     { id: 'global', label: 'الاقتصاد العالمي', icon: 'fa-solid fa-globe', badge: null },
-    { id: 'market', label: 'السوق', icon: 'fa-solid fa-store', badge: 'جديد' },
+    { id: 'market', label: 'السوق', icon: 'fa-solid fa-store', badge: 'مباشر' },
     { id: 'jobs', label: 'سوق العمل', icon: 'fa-solid fa-briefcase', badge: null },
     { id: 'treasury', label: 'الخزينة', icon: 'fa-solid fa-vault', badge: null },
     ...(user?.role === 'owner' ? [{ id: 'admin', label: 'لوحة التحكم', icon: 'fa-solid fa-shield-halved', badge: null }] : []),
@@ -41,13 +44,21 @@ const Sidebar: React.FC<SidebarProps> = ({ currentPage, onNavigate }) => {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{user?.username || 'ضيف'}</p>
-            <p className="text-xs text-slate-400">{user?.countryFlag} {user?.country || '-'}</p>
+            <p className="text-xs text-slate-400">{country?.flag || '🌍'} {country?.name || '-'}</p>
           </div>
           {user?.role === 'owner' && (
             <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded-full">
               👑 مالك
             </span>
           )}
+        </div>
+      </div>
+
+      {/* Connection Status */}
+      <div className="px-4 py-2 border-b border-indigo-500/20">
+        <div className="flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+          <span className="text-[10px] text-emerald-400">متصل بـ Supabase</span>
         </div>
       </div>
 

@@ -1,40 +1,54 @@
-import React, { useState } from 'react';
-import { countries, resources, globalMarketComparison } from '../data/mockData';
+import React, { useEffect, useState } from 'react';
+import { countriesService, resourcesService, globalMarketService } from '../services/supabaseService';
+import type { Country, Resource, GlobalMarketComparison } from '../services/supabaseService';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar } from 'recharts';
 
 const GlobalDashboard: React.FC = () => {
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
+  const [globalData, setGlobalData] = useState<GlobalMarketComparison[]>([]);
   const [selectedResource, setSelectedResource] = useState('خشب');
+  const [loading, setLoading] = useState(true);
 
-  const resourcePrices = globalMarketComparison.find(r => r.resource === selectedResource);
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      const [cRes, rRes, gRes] = await Promise.all([
+        countriesService.getAll(),
+        resourcesService.getAll(),
+        globalMarketService.getAll(),
+      ]);
+      if (cRes.data) setCountries(cRes.data);
+      if (rRes.data) setResources(rRes.data);
+      if (gRes.data) setGlobalData(gRes.data);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
 
-  const radarData = countries.map(c => ({
-    country: c.name,
-    اقتصاد: (c.gdp / 1000000) * 10,
-    سكان: (c.population / 1000) * 10,
-    خزينة: (c.treasury / 1000000) * 10,
-  }));
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-4xl text-indigo-400 mb-4"></i>
+          <p className="text-slate-400">جاري تحميل البيانات العالمية...</p>
+        </div>
+      </div>
+    );
+  }
 
-  const comparisonChartData = resourcePrices ? [
-    { name: 'نوفاريا 🏔️', price: resourcePrices.novaria },
-    { name: 'أركاديا 🌊', price: resourcePrices.arcadia },
-    { name: 'سولاريا ☀️', price: resourcePrices.solaria },
-    { name: 'فروستلاند ❄️', price: resourcePrices.frostland },
-    { name: 'إيمريون 🌿', price: resourcePrices.emrion },
-    { name: 'ثاندوريا ⚡', price: resourcePrices.thandoria },
-  ] : [];
+  // Build comparison data for selected resource
+  const resourceData = globalData.filter(g => g.resource_name === selectedResource);
+  const comparisonChartData = resourceData.map(gd => {
+    const country = countries.find(c => c.id === gd.country_id);
+    return { name: `${country?.name || ''} ${country?.flag || ''}`, price: gd.price };
+  });
 
-  const cheapestMarket = resourcePrices ? Object.entries(resourcePrices)
-    .filter(([key]) => key !== 'resource')
-    .sort(([, a], [, b]) => (a as number) - (b as number))[0] : null;
-
-  const expensiveMarket = resourcePrices ? Object.entries(resourcePrices)
-    .filter(([key]) => key !== 'resource')
-    .sort(([, a], [, b]) => (b as number) - (a as number))[0] : null;
-
-  const countryNameMap: Record<string, string> = {
-    novaria: 'نوفاريا', arcadia: 'أركاديا', solaria: 'سولاريا',
-    frostland: 'فروستلاند', emrion: 'إيمريون', thandoria: 'ثاندوريا'
-  };
+  const prices = resourceData.map(g => g.price);
+  const cheapestPrice = prices.length ? Math.min(...prices) : 0;
+  const expensivePrice = prices.length ? Math.max(...prices) : 0;
+  const cheapestCountry = countries.find(c => c.id === resourceData.find(g => g.price === cheapestPrice)?.country_id);
+  const expensiveCountry = countries.find(c => c.id === resourceData.find(g => g.price === expensivePrice)?.country_id);
 
   return (
     <div className="space-y-6 slide-in">
@@ -45,11 +59,11 @@ const GlobalDashboard: React.FC = () => {
             <i className="fa-solid fa-globe text-indigo-400"></i>
             الاقتصاد العالمي
           </h1>
-          <p className="text-slate-400 text-sm mt-1">مقارنة وتحليل اقتصادات جميع الدول</p>
+          <p className="text-slate-400 text-sm mt-1">مقارنة وتحليل اقتصادات جميع الدول (بيانات Supabase)</p>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-slate-400">آخر تحديث:</span>
-          <span className="text-xs text-emerald-400 font-medium">منذ 3 دقائق</span>
+          <span className="text-xs text-emerald-400 font-medium">مباشر</span>
         </div>
       </div>
 
@@ -89,7 +103,7 @@ const GlobalDashboard: React.FC = () => {
             </div>
             <span className="text-xs text-slate-400">متوسط التضخم</span>
           </div>
-          <p className="text-2xl font-bold text-white">{(countries.reduce((a, c) => a + c.inflation, 0) / countries.length).toFixed(1)}%</p>
+          <p className="text-2xl font-bold text-white">{countries.length ? (countries.reduce((a, c) => a + c.inflation, 0) / countries.length).toFixed(1) : 0}%</p>
         </div>
       </div>
 
@@ -100,44 +114,43 @@ const GlobalDashboard: React.FC = () => {
             <i className="fa-solid fa-scale-balanced text-amber-400"></i>
             مقارنة الأسعار بين الدول
           </h3>
-          <div className="flex items-center gap-2">
-            <select
-              value={selectedResource}
-              onChange={(e) => setSelectedResource(e.target.value)}
-              className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm focus:outline-none focus:border-indigo-500"
-            >
-              {resources.map(r => (
-                <option key={r.id} value={r.name}>{r.icon} {r.name}</option>
-              ))}
-            </select>
-          </div>
+          <select
+            value={selectedResource}
+            onChange={(e) => setSelectedResource(e.target.value)}
+            className="px-3 py-2 rounded-lg bg-slate-800 border border-slate-600 text-white text-sm focus:outline-none focus:border-indigo-500"
+          >
+            {resources.map(r => (
+              <option key={r.id} value={r.name}>{r.icon} {r.name}</option>
+            ))}
+          </select>
         </div>
 
-        {cheapestMarket && expensiveMarket && (
+        {cheapestCountry && expensiveCountry && (
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
               <p className="text-xs text-emerald-400 mb-1">🏷️ أرخص سوق</p>
-              <p className="text-lg font-bold text-white">{countryNameMap[cheapestMarket[0]]} - {cheapestMarket[1]} 💰</p>
+              <p className="text-lg font-bold text-white">{cheapestCountry.flag} {cheapestCountry.name} - {cheapestPrice} 💰</p>
             </div>
             <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30">
               <p className="text-xs text-red-400 mb-1">💸 أغلى سوق</p>
-              <p className="text-lg font-bold text-white">{countryNameMap[expensiveMarket[0]]} - {expensiveMarket[1]} 💰</p>
+              <p className="text-lg font-bold text-white">{expensiveCountry.flag} {expensiveCountry.name} - {expensivePrice} 💰</p>
             </div>
           </div>
         )}
 
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={comparisonChartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-            <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
-            <YAxis stroke="#94a3b8" fontSize={12} />
-            <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px', direction: 'rtl' }}
-              labelStyle={{ color: '#e2e8f0' }}
-            />
-            <Bar dataKey="price" name="السعر" fill="#6366f1" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+        {comparisonChartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={comparisonChartData}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+              <YAxis stroke="#94a3b8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px', direction: 'rtl' }} labelStyle={{ color: '#e2e8f0' }} />
+              <Bar dataKey="price" name="السعر" fill="#6366f1" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-slate-400 text-center py-10">لا توجد بيانات مقارنة</p>
+        )}
       </div>
 
       {/* Countries Comparison Table */}
@@ -159,7 +172,7 @@ const GlobalDashboard: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {countries.sort((a, b) => b.gdp - a.gdp).map((country, i) => (
+              {countries.map((country, i) => (
                 <tr key={country.id} className="border-b border-slate-800 hover:bg-slate-800/30 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
@@ -171,7 +184,7 @@ const GlobalDashboard: React.FC = () => {
                   <td className="py-3 px-4 text-amber-300 font-mono">{(country.treasury / 1000).toFixed(0)}K</td>
                   <td className="py-3 px-4 text-emerald-300 font-mono">{(country.gdp / 1000).toFixed(0)}K</td>
                   <td className="py-3 px-4 text-blue-300 font-mono">{country.population.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-orange-300">{country.taxRate}%</td>
+                  <td className="py-3 px-4 text-orange-300">{country.tax_rate}%</td>
                   <td className="py-3 px-4">
                     <span className={`px-2 py-0.5 rounded-full text-xs ${country.inflation <= 3 ? 'bg-emerald-500/20 text-emerald-400' : country.inflation <= 4 ? 'bg-amber-500/20 text-amber-400' : 'bg-red-500/20 text-red-400'}`}>
                       {country.inflation}%
@@ -192,18 +205,17 @@ const GlobalDashboard: React.FC = () => {
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {resources.map((resource) => {
-            const prices = globalMarketComparison.find(r => r.resource === resource.name);
-            const allPrices = prices ? Object.entries(prices).filter(([k]) => k !== 'resource').map(([, v]) => v as number) : [];
-            const avgPrice = allPrices.length ? Math.round(allPrices.reduce((a, b) => a + b, 0) / allPrices.length) : 0;
-            const minPrice = allPrices.length ? Math.min(...allPrices) : 0;
-            const maxPrice = allPrices.length ? Math.max(...allPrices) : 0;
+            const resPrices = globalData.filter(g => g.resource_name === resource.name).map(g => g.price);
+            const avgPrice = resPrices.length ? Math.round(resPrices.reduce((a, b) => a + b, 0) / resPrices.length) : 0;
+            const minPrice = resPrices.length ? Math.min(...resPrices) : 0;
+            const maxPrice = resPrices.length ? Math.max(...resPrices) : 0;
 
             return (
               <div key={resource.id} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-2xl">{resource.icon}</span>
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${resource.change24h >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {resource.change24h >= 0 ? '↑' : '↓'} {Math.abs(resource.change24h)}%
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${resource.change_24h >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+                    {resource.change_24h >= 0 ? '↑' : '↓'} {Math.abs(resource.change_24h)}%
                   </span>
                 </div>
                 <p className="text-sm font-medium text-white mb-1">{resource.name}</p>
@@ -212,9 +224,11 @@ const GlobalDashboard: React.FC = () => {
                   <span>أدنى: {minPrice}</span>
                   <span>أعلى: {maxPrice}</span>
                 </div>
-                <div className="mt-2 h-1.5 rounded-full bg-slate-700 overflow-hidden">
-                  <div className="h-full rounded-full bg-gradient-to-l from-indigo-500 to-purple-500" style={{ width: `${((avgPrice - minPrice) / (maxPrice - minPrice || 1)) * 100}%` }}></div>
-                </div>
+                {maxPrice > minPrice && (
+                  <div className="mt-2 h-1.5 rounded-full bg-slate-700 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-l from-indigo-500 to-purple-500" style={{ width: `${((avgPrice - minPrice) / (maxPrice - minPrice)) * 100}%` }}></div>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -227,18 +241,27 @@ const GlobalDashboard: React.FC = () => {
           <i className="fa-solid fa-chart-simple text-emerald-400"></i>
           مؤشر الأداء الاقتصادي
         </h3>
-        <ResponsiveContainer width="100%" height={350}>
-          <RadarChart data={radarData}>
-            <PolarGrid stroke="#334155" />
-            <PolarAngleAxis dataKey="country" stroke="#94a3b8" fontSize={12} />
-            <PolarRadiusAxis stroke="#475569" fontSize={10} />
-            <Radar name="اقتصاد" dataKey="اقتصاد" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
-            <Radar name="سكان" dataKey="سكان" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
-            <Radar name="خزينة" dataKey="خزينة" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.2} />
-            <Legend />
-            <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
-          </RadarChart>
-        </ResponsiveContainer>
+        {countries.length > 0 ? (
+          <ResponsiveContainer width="100%" height={350}>
+            <RadarChart data={countries.map(c => ({
+              country: c.name,
+              اقتصاد: (c.gdp / 1000000) * 10,
+              سكان: (c.population / 1000) * 10,
+              خزينة: (c.treasury / 1000000) * 10,
+            }))}>
+              <PolarGrid stroke="#334155" />
+              <PolarAngleAxis dataKey="country" stroke="#94a3b8" fontSize={12} />
+              <PolarRadiusAxis stroke="#475569" fontSize={10} />
+              <Radar name="اقتصاد" dataKey="اقتصاد" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
+              <Radar name="سكان" dataKey="سكان" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
+              <Radar name="خزينة" dataKey="خزينة" stroke="#f59e0b" fill="#f59e0b" fillOpacity={0.2} />
+              <Legend />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
+            </RadarChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-slate-400 text-center py-10">لا توجد بيانات</p>
+        )}
       </div>
     </div>
   );

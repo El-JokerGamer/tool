@@ -1,15 +1,43 @@
-import React, { useState } from 'react';
-import { marketOffers, resources } from '../data/mockData';
+import React, { useEffect, useState } from 'react';
+import { marketService, resourcesService } from '../services/supabaseService';
+import type { MarketOffer, Resource } from '../services/supabaseService';
 
 const MarketPage: React.FC = () => {
+  const [offers, setOffers] = useState<MarketOffer[]>([]);
+  const [resources, setResources] = useState<Resource[]>([]);
   const [filter, setFilter] = useState<'all' | 'buy' | 'sell'>('all');
   const [resourceFilter, setResourceFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
 
-  const filteredOffers = marketOffers.filter(offer => {
+  useEffect(() => {
+    const fetchData = async () => {
+      const [oRes, rRes] = await Promise.all([
+        marketService.getAll(),
+        resourcesService.getAll(),
+      ]);
+      if (oRes.data) setOffers(oRes.data);
+      if (rRes.data) setResources(rRes.data);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  const filteredOffers = offers.filter(offer => {
     const typeMatch = filter === 'all' || offer.type === filter;
-    const resourceMatch = resourceFilter === 'all' || offer.resource === resourceFilter;
+    const resourceMatch = resourceFilter === 'all' || offer.resource_name === resourceFilter;
     return typeMatch && resourceMatch;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-4xl text-indigo-400 mb-4"></i>
+          <p className="text-slate-400">جاري تحميل عروض السوق...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 slide-in">
@@ -20,7 +48,7 @@ const MarketPage: React.FC = () => {
             <i className="fa-solid fa-store text-purple-400"></i>
             السوق العالمي
           </h1>
-          <p className="text-slate-400 text-sm mt-1">جميع عروض البيع والشراء في الأسواق</p>
+          <p className="text-slate-400 text-sm mt-1">جميع عروض البيع والشراء (بيانات Supabase المباشرة)</p>
         </div>
       </div>
 
@@ -75,15 +103,15 @@ const MarketPage: React.FC = () => {
       {/* Offers List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {filteredOffers.map((offer) => {
-          const resource = resources.find(r => r.name === offer.resource);
+          const resource = resources.find(r => r.name === offer.resource_name);
           return (
             <div key={offer.id} className="glass-card rounded-xl p-5 stat-card">
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
                   <span className="text-3xl">{resource?.icon || '📦'}</span>
                   <div>
-                    <p className="text-lg font-bold text-white">{offer.resource}</p>
-                    <p className="text-xs text-slate-400">{offer.country}</p>
+                    <p className="text-lg font-bold text-white">{offer.resource_name}</p>
+                    <p className="text-xs text-slate-400">{offer.country_name}</p>
                   </div>
                 </div>
                 <span className={`px-3 py-1 rounded-lg text-sm font-bold ${
@@ -113,19 +141,26 @@ const MarketPage: React.FC = () => {
               <div className="flex items-center justify-between pt-3 border-t border-slate-700/50">
                 <div className="flex items-center gap-2">
                   <div className="w-6 h-6 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center text-[10px] font-bold text-white">
-                    {offer.seller.charAt(0)}
+                    {offer.seller?.charAt(0)}
                   </div>
                   <span className="text-xs text-slate-300">{offer.seller}</span>
                 </div>
                 <span className="text-xs text-slate-400">
                   <i className="fa-solid fa-clock ml-1"></i>
-                  {offer.timestamp}
+                  {new Date(offer.created_at).toLocaleDateString('ar')}
                 </span>
               </div>
             </div>
           );
         })}
       </div>
+
+      {filteredOffers.length === 0 && (
+        <div className="glass-card rounded-xl p-10 text-center">
+          <i className="fa-solid fa-store-slash text-4xl text-slate-500 mb-4"></i>
+          <p className="text-slate-400">لا توجد عروض مطابقة للفلتر</p>
+        </div>
+      )}
 
       {/* Market Stats */}
       <div className="glass-card rounded-xl p-6">
@@ -135,19 +170,19 @@ const MarketPage: React.FC = () => {
         </h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 text-center">
-            <p className="text-2xl font-bold text-emerald-300">{marketOffers.filter(o => o.type === 'buy').length}</p>
+            <p className="text-2xl font-bold text-emerald-300">{offers.filter(o => o.type === 'buy').length}</p>
             <p className="text-xs text-slate-400 mt-1">عروض شراء</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 text-center">
-            <p className="text-2xl font-bold text-red-300">{marketOffers.filter(o => o.type === 'sell').length}</p>
+            <p className="text-2xl font-bold text-red-300">{offers.filter(o => o.type === 'sell').length}</p>
             <p className="text-xs text-slate-400 mt-1">عروض بيع</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 text-center">
-            <p className="text-2xl font-bold text-indigo-300">{marketOffers.reduce((a, o) => a + o.quantity, 0).toLocaleString()}</p>
+            <p className="text-2xl font-bold text-indigo-300">{offers.reduce((a, o) => a + o.quantity, 0).toLocaleString()}</p>
             <p className="text-xs text-slate-400 mt-1">إجمالي الكميات</p>
           </div>
           <div className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/50 text-center">
-            <p className="text-2xl font-bold text-amber-300">{(marketOffers.reduce((a, o) => a + o.price * o.quantity, 0) / 1000).toFixed(0)}K</p>
+            <p className="text-2xl font-bold text-amber-300">{(offers.reduce((a, o) => a + o.price * o.quantity, 0) / 1000).toFixed(0)}K</p>
             <p className="text-xs text-slate-400 mt-1">حجم التداول 💰</p>
           </div>
         </div>

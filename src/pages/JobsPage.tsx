@@ -1,19 +1,47 @@
-import React, { useState } from 'react';
-import { jobOffers, countries } from '../data/mockData';
+import React, { useEffect, useState } from 'react';
+import { jobsService, countriesService } from '../services/supabaseService';
+import type { JobOffer, Country } from '../services/supabaseService';
 
 const JobsPage: React.FC = () => {
+  const [jobs, setJobs] = useState<JobOffer[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const [countryFilter, setCountryFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [loading, setLoading] = useState(true);
 
-  const filteredJobs = jobOffers.filter(job => {
-    const countryMatch = countryFilter === 'all' || job.country === countryFilter;
+  useEffect(() => {
+    const fetchData = async () => {
+      const [jRes, cRes] = await Promise.all([
+        jobsService.getAll(),
+        countriesService.getAll(),
+      ]);
+      if (jRes.data) setJobs(jRes.data);
+      if (cRes.data) setCountries(cRes.data);
+      setLoading(false);
+    };
+    fetchData();
+  }, []);
+
+  const filteredJobs = jobs.filter(job => {
+    const countryMatch = countryFilter === 'all' || job.country_name === countryFilter;
     const typeMatch = typeFilter === 'all' || job.type === typeFilter;
     return countryMatch && typeMatch;
   });
 
-  const avgSalary = Math.round(jobOffers.reduce((a, j) => a + j.salary, 0) / jobOffers.length);
-  const maxSalary = Math.max(...jobOffers.map(j => j.salary));
-  const minSalary = Math.min(...jobOffers.map(j => j.salary));
+  const avgSalary = jobs.length > 0 ? Math.round(jobs.reduce((a, j) => a + j.salary, 0) / jobs.length) : 0;
+  const maxSalary = jobs.length > 0 ? Math.max(...jobs.map(j => j.salary)) : 0;
+  const minSalary = jobs.length > 0 ? Math.min(...jobs.map(j => j.salary)) : 0;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-4xl text-indigo-400 mb-4"></i>
+          <p className="text-slate-400">جاري تحميل عروض العمل...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 slide-in">
@@ -23,7 +51,7 @@ const JobsPage: React.FC = () => {
           <i className="fa-solid fa-briefcase text-cyan-400"></i>
           سوق العمل
         </h1>
-        <p className="text-slate-400 text-sm mt-1">عروض العمل والأجور في جميع الدول</p>
+        <p className="text-slate-400 text-sm mt-1">عروض العمل والأجور في جميع الدول (بيانات Supabase)</p>
       </div>
 
       {/* Stats */}
@@ -32,7 +60,7 @@ const JobsPage: React.FC = () => {
           <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center mb-3">
             <i className="fa-solid fa-briefcase text-white text-sm"></i>
           </div>
-          <p className="text-2xl font-bold text-white">{jobOffers.length}</p>
+          <p className="text-2xl font-bold text-white">{jobs.length}</p>
           <p className="text-xs text-slate-400 mt-1">عرض عمل متاح</p>
         </div>
         <div className="glass-card rounded-xl p-5 stat-card">
@@ -99,7 +127,7 @@ const JobsPage: React.FC = () => {
         </h3>
         <div className="space-y-3">
           {countries.map(country => {
-            const countryJobs = jobOffers.filter(j => j.country === country.name);
+            const countryJobs = jobs.filter(j => j.country_name === country.name);
             const avg = countryJobs.length > 0 ? Math.round(countryJobs.reduce((a, j) => a + j.salary, 0) / countryJobs.length) : 0;
             const percentage = maxSalary > 0 ? (avg / maxSalary) * 100 : 0;
 
@@ -134,7 +162,7 @@ const JobsPage: React.FC = () => {
         </h3>
         <div className="space-y-3">
           {filteredJobs.map((job) => {
-            const country = countries.find(c => c.name === job.country);
+            const country = countries.find(c => c.name === job.country_name);
             return (
               <div key={job.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700/30 hover:border-indigo-500/30 transition-all">
                 <div className="flex items-center gap-4">
@@ -145,7 +173,7 @@ const JobsPage: React.FC = () => {
                     <p className="text-base font-bold text-white">{job.title}</p>
                     <p className="text-sm text-slate-400">{job.company}</p>
                     <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-slate-500">{country?.flag} {job.country}</span>
+                      <span className="text-xs text-slate-500">{country?.flag} {job.country_name}</span>
                       <span className="text-xs px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300">{job.type}</span>
                     </div>
                   </div>
@@ -153,11 +181,14 @@ const JobsPage: React.FC = () => {
                 <div className="text-left">
                   <p className="text-xl font-bold text-emerald-300">{job.salary} 💰</p>
                   <p className="text-xs text-slate-400">/ يوم</p>
-                  <p className="text-xs text-slate-500 mt-1">{job.posted}</p>
+                  <p className="text-xs text-slate-500 mt-1">{new Date(job.posted_at).toLocaleDateString('ar')}</p>
                 </div>
               </div>
             );
           })}
+          {filteredJobs.length === 0 && (
+            <p className="text-slate-400 text-center py-10">لا توجد عروض عمل مطابقة</p>
+          )}
         </div>
       </div>
     </div>

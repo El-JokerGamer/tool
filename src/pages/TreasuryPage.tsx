@@ -1,14 +1,59 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { countries, treasuryEntries, revenueData } from '../data/mockData';
+import { countriesService, treasuryService, revenueService } from '../services/supabaseService';
+import type { Country, TreasuryEntry, RevenueData } from '../services/supabaseService';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 
 const TreasuryPage: React.FC = () => {
   const { user } = useAuth();
-  const country = countries.find(c => c.name === user?.country) || countries[0];
+  const [country, setCountry] = useState<Country | null>(null);
+  const [entries, setEntries] = useState<TreasuryEntry[]>([]);
+  const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const incomeEntries = treasuryEntries.filter(e => e.type === 'income');
-  const expenseEntries = treasuryEntries.filter(e => e.type === 'expense');
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        if (user?.country_id) {
+          const { data: countryData } = await countriesService.getById(user.country_id);
+          if (countryData) setCountry(countryData);
+        }
+        const [entRes, revRes] = await Promise.all([
+          treasuryService.getAll(),
+          revenueService.getAll(),
+        ]);
+        if (entRes.data) setEntries(entRes.data);
+        if (revRes.data) setRevenueData(revRes.data);
+      } catch (err) {
+        console.error('Error fetching treasury data:', err);
+      }
+      setLoading(false);
+    };
+    fetchData();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <i className="fa-solid fa-spinner fa-spin text-4xl text-indigo-400 mb-4"></i>
+          <p className="text-slate-400">جاري تحميل بيانات الخزينة...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!country) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <p className="text-slate-400">لم يتم العثور على بيانات البلد</p>
+      </div>
+    );
+  }
+
+  const incomeEntries = entries.filter(e => e.type === 'income');
+  const expenseEntries = entries.filter(e => e.type === 'expense');
   const totalIncome = incomeEntries.reduce((a, e) => a + e.amount, 0);
   const totalExpense = expenseEntries.reduce((a, e) => a + e.amount, 0);
   const netBalance = totalIncome - totalExpense;
@@ -37,7 +82,7 @@ const TreasuryPage: React.FC = () => {
             <span className="text-3xl">{country.flag}</span>
             خزينة {country.name}
           </h1>
-          <p className="text-slate-400 text-sm mt-1">تتبع الإيرادات والمصروفات الحكومية</p>
+          <p className="text-slate-400 text-sm mt-1">تتبع الإيرادات والمصروفات الحكومية (بيانات Supabase)</p>
         </div>
       </div>
 
@@ -93,21 +138,21 @@ const TreasuryPage: React.FC = () => {
           <i className="fa-solid fa-chart-area text-indigo-400"></i>
           تطور الإيرادات والمصروفات
         </h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={revenueData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-            <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
-            <YAxis stroke="#94a3b8" fontSize={12} />
-            <Tooltip
-              contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px', direction: 'rtl' }}
-              labelStyle={{ color: '#e2e8f0' }}
-              formatter={(value: number) => [`${value.toLocaleString()} 💰`]}
-            />
-            <Legend />
-            <Area type="monotone" dataKey="income" name="الإيرادات" stroke="#10b981" fill="#10b981" fillOpacity={0.3} strokeWidth={2} />
-            <Area type="monotone" dataKey="expense" name="المصروفات" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} strokeWidth={2} />
-          </AreaChart>
-        </ResponsiveContainer>
+        {revenueData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={revenueData.map(r => ({ month: r.month_name, income: r.income, expense: r.expense }))}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+              <XAxis dataKey="month" stroke="#94a3b8" fontSize={12} />
+              <YAxis stroke="#94a3b8" fontSize={12} />
+              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px', direction: 'rtl' }} labelStyle={{ color: '#e2e8f0' }} formatter={(value: number) => [`${value.toLocaleString()} 💰`]} />
+              <Legend />
+              <Area type="monotone" dataKey="income" name="الإيرادات" stroke="#10b981" fill="#10b981" fillOpacity={0.3} strokeWidth={2} />
+              <Area type="monotone" dataKey="expense" name="المصروفات" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} strokeWidth={2} />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <p className="text-slate-400 text-center py-10">لا توجد بيانات</p>
+        )}
       </div>
 
       {/* Pie Charts */}
@@ -117,16 +162,20 @@ const TreasuryPage: React.FC = () => {
             <i className="fa-solid fa-chart-pie text-emerald-400"></i>
             توزيع الإيرادات
           </h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={incomePieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {incomePieData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
+          {incomePieData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={incomePieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {incomePieData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-slate-400 text-center py-10">لا توجد إيرادات</p>
+          )}
         </div>
 
         <div className="glass-card rounded-xl p-6">
@@ -134,16 +183,20 @@ const TreasuryPage: React.FC = () => {
             <i className="fa-solid fa-chart-pie text-red-400"></i>
             توزيع المصروفات
           </h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <PieChart>
-              <Pie data={expensePieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                {expensePieData.map((_, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
-            </PieChart>
-          </ResponsiveContainer>
+          {expensePieData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart>
+                <Pie data={expensePieData} cx="50%" cy="50%" outerRadius={90} dataKey="value" label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  {expensePieData.map((_, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip contentStyle={{ background: '#1e293b', border: '1px solid #4f46e5', borderRadius: '12px' }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <p className="text-slate-400 text-center py-10">لا توجد مصروفات</p>
+          )}
         </div>
       </div>
 
@@ -154,7 +207,7 @@ const TreasuryPage: React.FC = () => {
           سجل المعاملات
         </h3>
         <div className="space-y-2">
-          {treasuryEntries.map((entry) => (
+          {entries.length > 0 ? entries.map((entry) => (
             <div key={entry.id} className="flex items-center justify-between p-4 rounded-xl bg-slate-800/30 border border-slate-700/30 hover:border-slate-600/50 transition-all">
               <div className="flex items-center gap-4">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
@@ -168,7 +221,7 @@ const TreasuryPage: React.FC = () => {
                   <p className="text-sm font-medium text-white">{entry.description}</p>
                   <div className="flex items-center gap-2 mt-1">
                     <span className="text-xs px-2 py-0.5 rounded-full bg-slate-700/50 text-slate-300">{entry.category}</span>
-                    <span className="text-xs text-slate-500">{entry.date}</span>
+                    <span className="text-xs text-slate-500">{entry.entry_date}</span>
                   </div>
                 </div>
               </div>
@@ -176,7 +229,9 @@ const TreasuryPage: React.FC = () => {
                 {entry.type === 'income' ? '+' : '-'}{entry.amount.toLocaleString()} 💰
               </p>
             </div>
-          ))}
+          )) : (
+            <p className="text-slate-400 text-center py-10">لا توجد معاملات</p>
+          )}
         </div>
       </div>
     </div>

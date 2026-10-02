@@ -11,15 +11,19 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
   const [serial, setSerial] = useState('');
   const [step, setStep] = useState<'input' | 'serial' | 'success'>('input');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     setLoading(true);
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    const result = signup(gameId);
-    if (result.success) {
+    
+    const result = await signup(gameId);
+    if (result.success && result.serial) {
       setSerial(result.serial);
       setStep('serial');
+    } else {
+      setError(result.error || 'حدث خطأ أثناء التسجيل');
     }
     setLoading(false);
   };
@@ -44,6 +48,10 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             </div>
             <h1 className="text-2xl font-bold gradient-text mb-2">إنشاء حساب جديد</h1>
             <p className="text-slate-400 text-sm">ربط حسابك في اللعبة بالأداة</p>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-xs text-emerald-400">متصل بـ Supabase</span>
+            </div>
           </div>
 
           {/* Steps Indicator */}
@@ -79,6 +87,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
                 />
               </div>
 
+              {error && (
+                <div className="flex items-center gap-2 p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                  <i className="fa-solid fa-circle-exclamation"></i>
+                  <span>{error}</span>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loading}
@@ -87,7 +102,7 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
                 {loading ? (
                   <>
                     <i className="fa-solid fa-spinner fa-spin"></i>
-                    <span>جاري جلب البيانات...</span>
+                    <span>جاري حفظ البيانات في Supabase...</span>
                   </>
                 ) : (
                   <>
@@ -104,13 +119,13 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
             <div className="space-y-5">
               <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
                 <i className="fa-solid fa-circle-check text-emerald-400 text-2xl mb-2"></i>
-                <p className="text-emerald-300 text-sm font-medium">تم جلب بياناتك بنجاح!</p>
+                <p className="text-emerald-300 text-sm font-medium">تم حفظ بياناتك في قاعدة البيانات!</p>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-2">
                   <i className="fa-solid fa-key ml-2 text-amber-400"></i>
-                  السيريال الخاص بك
+                  السيريال الخاص بك (محفوظ في Supabase)
                 </label>
                 <div className="relative">
                   <input
@@ -174,6 +189,10 @@ const Signup: React.FC<SignupProps> = ({ onSwitchToLogin }) => {
                   <div className="flex justify-between">
                     <span className="text-slate-400">ID اللعبة:</span>
                     <span className="text-white font-mono">{gameId}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">قاعدة البيانات:</span>
+                    <span className="text-emerald-400 font-medium">Supabase ✓</span>
                   </div>
                 </div>
               </div>

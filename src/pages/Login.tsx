@@ -18,13 +18,11 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup, onLoginSuccess }) => {
     setError('');
     setLoading(true);
 
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    const success = login(gameId, serial);
-    if (success) {
+    const result = await login(gameId, serial);
+    if (result.success) {
       onLoginSuccess();
     } else {
-      setError('بيانات الدخول غير صحيحة. تأكد من ID اللعبة والسيريال.');
+      setError(result.error || 'بيانات الدخول غير صحيحة.');
     }
     setLoading(false);
   };
@@ -45,6 +43,10 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup, onLoginSuccess }) => {
             </div>
             <h1 className="text-2xl font-bold gradient-text mb-2">Eclesiar Economic Dashboard</h1>
             <p className="text-slate-400 text-sm">لوحة تحليل الاقتصاد - لعبة Eclesiar</p>
+            <div className="flex items-center justify-center gap-2 mt-3">
+              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></div>
+              <span className="text-xs text-emerald-400">متصل بـ Supabase</span>
+            </div>
           </div>
 
           {/* Form */}
@@ -94,7 +96,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup, onLoginSuccess }) => {
               {loading ? (
                 <>
                   <i className="fa-solid fa-spinner fa-spin"></i>
-                  <span>جاري التحقق...</span>
+                  <span>جاري التحقق من قاعدة البيانات...</span>
                 </>
               ) : (
                 <>
@@ -130,7 +132,7 @@ const Login: React.FC<LoginProps> = ({ onSwitchToSignup, onLoginSuccess }) => {
           <div className="mt-4 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
             <p className="text-xs text-indigo-300 text-center mb-1">
               <i className="fa-solid fa-info-circle ml-1"></i>
-              بيانات تجريبية للدخول:
+              بيانات تجريبية للدخول (بعد تشغيل SQL):
             </p>
             <p className="text-xs text-slate-400 text-center font-mono">
               ID: 10001 | السيريال: A1B2-C3D4-E5F6-G7H8
